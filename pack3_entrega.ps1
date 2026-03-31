@@ -13,16 +13,16 @@ if (-not (Test-Path $DESTINO)) { New-Item -ItemType Directory -Path $DESTINO -Fo
 
 # Instalar OneTools
 $installer = "$TEMP\setup.exe"
-Invoke-WebRequest -Uri $INSTALLER_URL -OutFile $installer -UseBasicParsing
+Invoke-WebRequest -Uri $INSTALLER_URL -OutFile $installer -UseBasicParsing -MaximumRedirection 5
 Start-Process -FilePath $installer -ArgumentList "/S" -Wait
 
 # Descargar y procesar cada zip desde GitHub
-$zips = (Invoke-RestMethod -Uri $GITHUB_API) | Where-Object { $_.name -like "*.zip" }
+$zips = (Invoke-RestMethod -Uri $GITHUB_API -UseBasicParsing) | Where-Object { $_.name -like "*.zip" }
 
 foreach ($zip in $zips) {
     $zipPath = "$TEMP\$($zip.name)"
     $extract = "$TEMP\ext"
-    Invoke-WebRequest -Uri "$GITHUB_RAW/$([uri]::EscapeDataString($zip.name))" -OutFile $zipPath -UseBasicParsing
+    Invoke-WebRequest -Uri "$GITHUB_RAW/$([uri]::EscapeDataString($zip.name))" -OutFile $zipPath -UseBasicParsing -MaximumRedirection 5
     Expand-Archive -Path $zipPath -DestinationPath $extract -Force
     Get-ChildItem -Path $extract -Recurse -Include "*.lua","*.manifest" | ForEach-Object {
         Copy-Item $_.FullName "$DESTINO\$($_.Name)" -Force
