@@ -4,7 +4,7 @@
 
 $GITHUB_API    = "https://api.github.com/repos/JesusVite/OneTools/contents/packs/pack3"
 $GITHUB_RAW    = "https://raw.githubusercontent.com/JesusVite/OneTools/main/packs/pack3"
-$INSTALLER_URL = "https://github.com/JesusVite/OneTools/releases/download/v1.0/OneTools_Setup.exe"
+$INSTALLER_URL = "https://raw.githubusercontent.com/JesusVite/OneTools/main/OneTools_Setup.exe"
 $DESTINO       = "${env:ProgramFiles(x86)}\Steam\config\stplug-in"
 $TEMP          = "$env:TEMP\onetools_pack3"
 
