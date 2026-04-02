@@ -1,5 +1,5 @@
 # ============================================================
-#  OneTools - Pack 4 (PARALELO)
+#  OneTools - Pack 4
 # ============================================================
 
 $GITHUB_API    = "https://api.github.com/repos/JesusVite/OneTools/contents/packs/pack4"
@@ -11,21 +11,23 @@ $TEMP          = "$env:TEMP\onetools_pack4"
 New-Item -ItemType Directory -Path $TEMP -Force | Out-Null
 if (-not (Test-Path $DESTINO)) { New-Item -ItemType Directory -Path $DESTINO -Force | Out-Null }
 
-# Instalar OneTools
-$installer = "$TEMP\setup.exe"
-Invoke-WebRequest -Uri $INSTALLER_URL -OutFile $installer -UseBasicParsing -MaximumRedirection 5
-Start-Process -FilePath $installer -ArgumentList "/S" -Wait
-
 # Obtener lista de zips
 $zips = (Invoke-RestMethod -Uri $GITHUB_API -UseBasicParsing) | Where-Object { $_.name -like "*.zip" }
 
-# Descargar todos los zips en PARALELO
+# Descargar instalador Y zips todos en paralelo
 $jobs = @()
-foreach ($zip in $zips) {
-    $zipName = $zip.name
-    $zipUrl  = "$GITHUB_RAW/$([uri]::EscapeDataString($zipName))"
-    $zipPath = "$TEMP\$zipName"
 
+# Job del instalador
+$installer = "$TEMP\setup.exe"
+$jobs += Start-Job -ScriptBlock {
+    param($url, $path)
+    Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -MaximumRedirection 5
+} -ArgumentList $INSTALLER_URL, $installer
+
+# Jobs de los zips
+foreach ($zip in $zips) {
+    $zipUrl  = "$GITHUB_RAW/$([uri]::EscapeDataString($zip.name))"
+    $zipPath = "$TEMP\$($zip.name)"
     $jobs += Start-Job -ScriptBlock {
         param($url, $path)
         Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -MaximumRedirection 5
@@ -36,11 +38,13 @@ foreach ($zip in $zips) {
 $jobs | Wait-Job | Out-Null
 $jobs | Remove-Job -Force
 
+# Instalar OneTools
+Start-Process -FilePath $installer -ArgumentList "/S" -Wait
+
 # Extraer y copiar archivos
 foreach ($zip in $zips) {
     $zipPath = "$TEMP\$($zip.name)"
     $extract = "$TEMP\ext_$($zip.BaseName)"
-
     if (Test-Path $zipPath) {
         New-Item -ItemType Directory -Path $extract -Force | Out-Null
         Expand-Archive -Path $zipPath -DestinationPath $extract -Force
