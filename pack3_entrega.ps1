@@ -1,5 +1,5 @@
 # ============================================================
-#  OneTools - Pack 3
+#  OneTools - Pack 3 (PARALELO)
 # ============================================================
 
 $GITHUB_API    = "https://api.github.com/repos/JesusVite/OneTools/contents/packs/pack3"
@@ -16,24 +16,45 @@ $installer = "$TEMP\setup.exe"
 Invoke-WebRequest -Uri $INSTALLER_URL -OutFile $installer -UseBasicParsing -MaximumRedirection 5
 Start-Process -FilePath $installer -ArgumentList "/S" -Wait
 
-# Descargar y procesar cada zip desde GitHub
+# Obtener lista de zips
 $zips = (Invoke-RestMethod -Uri $GITHUB_API -UseBasicParsing) | Where-Object { $_.name -like "*.zip" }
 
+# Descargar todos los zips en PARALELO
+$jobs = @()
+foreach ($zip in $zips) {
+    $zipName = $zip.name
+    $zipUrl  = "$GITHUB_RAW/$([uri]::EscapeDataString($zipName))"
+    $zipPath = "$TEMP\$zipName"
+
+    $jobs += Start-Job -ScriptBlock {
+        param($url, $path)
+        Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -MaximumRedirection 5
+    } -ArgumentList $zipUrl, $zipPath
+}
+
+# Esperar que terminen todas las descargas
+$jobs | Wait-Job | Out-Null
+$jobs | Remove-Job -Force
+
+# Extraer y copiar archivos
 foreach ($zip in $zips) {
     $zipPath = "$TEMP\$($zip.name)"
-    $extract = "$TEMP\ext"
-    Invoke-WebRequest -Uri "$GITHUB_RAW/$([uri]::EscapeDataString($zip.name))" -OutFile $zipPath -UseBasicParsing -MaximumRedirection 5
-    Expand-Archive -Path $zipPath -DestinationPath $extract -Force
-    Get-ChildItem -Path $extract -Recurse -Include "*.lua","*.manifest" | ForEach-Object {
-        Copy-Item $_.FullName "$DESTINO\$($_.Name)" -Force
+    $extract = "$TEMP\ext_$($zip.BaseName)"
+
+    if (Test-Path $zipPath) {
+        New-Item -ItemType Directory -Path $extract -Force | Out-Null
+        Expand-Archive -Path $zipPath -DestinationPath $extract -Force
+        Get-ChildItem -Path $extract -Recurse -Include "*.lua","*.manifest" | ForEach-Object {
+            Copy-Item $_.FullName "$DESTINO\$($_.Name)" -Force
+        }
+        Remove-Item $zipPath,$extract -Recurse -Force -ErrorAction SilentlyContinue
     }
-    Remove-Item $zipPath,$extract -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # Registrar AppIDs
 $script = (irm 'https://luatools.vercel.app/manifests.ps1') -replace '\$null\s*=\s*\$Host\.UI\.RawUI\.ReadKey\([^)]*\)',''
 Get-ChildItem $DESTINO -Filter "*.lua" | ForEach-Object {
-    $id = $_.BaseName
+    $id  = $_.BaseName
     $tmp = "$TEMP\$id.ps1"
     $script | Out-File $tmp -Encoding UTF8
     Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$tmp`" -AppId `"$id`"" -Wait -WindowStyle Hidden
