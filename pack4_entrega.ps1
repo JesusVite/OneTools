@@ -3,48 +3,53 @@
 # ============================================================
 
 $GITHUB_API    = "https://api.github.com/repos/JesusVite/OneTools/contents/packs/pack4"
-$GITHUB_RAW    = "https://raw.githubusercontent.com/JesusVite/OneTools/main/packs/pack4"
 $INSTALLER_URL = "https://raw.githubusercontent.com/JesusVite/OneTools/main/OneTools_Setup.exe"
 $DESTINO       = "${env:ProgramFiles(x86)}\Steam\config\stplug-in"
+$STEAMTOOLS_EXE = "C:\Program Files\SteamTools\SteamTools.exe"
+$STEAM_EXE     = "${env:ProgramFiles(x86)}\Steam\steam.exe"
 $TEMP          = "$env:TEMP\onetools_pack4"
 
 New-Item -ItemType Directory -Path $TEMP -Force | Out-Null
 if (-not (Test-Path $DESTINO)) { New-Item -ItemType Directory -Path $DESTINO -Force | Out-Null }
 
-# Obtener lista de zips
+# Obtener lista con URLs directas
 $zips = (Invoke-RestMethod -Uri $GITHUB_API -UseBasicParsing) | Where-Object { $_.name -like "*.zip" }
 
-# Descargar instalador Y zips todos en paralelo
+# Descargar todo en paralelo
 $jobs = @()
-
-# Job del instalador
 $installer = "$TEMP\setup.exe"
 $jobs += Start-Job -ScriptBlock {
     param($url, $path)
-    Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -MaximumRedirection 5
+    (New-Object System.Net.WebClient).DownloadFile($url, $path)
 } -ArgumentList $INSTALLER_URL, $installer
 
-# Jobs de los zips
 foreach ($zip in $zips) {
-    $zipUrl  = "$GITHUB_RAW/$([uri]::EscapeDataString($zip.name))"
     $zipPath = "$TEMP\$($zip.name)"
+    $dlUrl   = $zip.download_url
     $jobs += Start-Job -ScriptBlock {
         param($url, $path)
-        Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -MaximumRedirection 5
-    } -ArgumentList $zipUrl, $zipPath
+        (New-Object System.Net.WebClient).DownloadFile($url, $path)
+    } -ArgumentList $dlUrl, $zipPath
 }
 
-# Esperar que terminen todas las descargas
 $jobs | Wait-Job | Out-Null
 $jobs | Remove-Job -Force
 
-# Instalar OneTools
+# Instalar OneTools y esperar que termine completamente
 Start-Process -FilePath $installer -ArgumentList "/S" -Wait
+Start-Sleep -Seconds 5
 
-# Extraer y copiar archivos
+# Esperar hasta que SteamTools.exe exista
+$intentos = 0
+while (-not (Test-Path $STEAMTOOLS_EXE) -and $intentos -lt 10) {
+    Start-Sleep -Seconds 2
+    $intentos++
+}
+
+# Extraer y copiar a stplug-in
 foreach ($zip in $zips) {
     $zipPath = "$TEMP\$($zip.name)"
-    $extract = "$TEMP\ext_$($zip.BaseName)"
+    $extract = "$TEMP\ext"
     if (Test-Path $zipPath) {
         New-Item -ItemType Directory -Path $extract -Force | Out-Null
         Expand-Archive -Path $zipPath -DestinationPath $extract -Force
@@ -55,23 +60,18 @@ foreach ($zip in $zips) {
     }
 }
 
-# Registrar AppIDs
-$script = (irm 'https://luatools.vercel.app/manifests.ps1') -replace '\$null\s*=\s*\$Host\.UI\.RawUI\.ReadKey\([^)]*\)',''
-Get-ChildItem $DESTINO -Filter "*.lua" | ForEach-Object {
-    $id  = $_.BaseName
-    $tmp = "$TEMP\$id.ps1"
-    $script | Out-File $tmp -Encoding UTF8
-    Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$tmp`" -AppId `"$id`"" -Wait -WindowStyle Hidden
-    Remove-Item $tmp -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
+# Abrir Steam
+if (Test-Path $STEAM_EXE) {
+    Start-Process -FilePath $STEAM_EXE
+    Start-Sleep -Seconds 5
 }
 
-# Abrir Steam y SteamTools
-Start-Process "${env:ProgramFiles(x86)}\Steam\steam.exe"
-Start-Process "C:\Program Files\SteamTools\SteamTools.exe"
-Start-Sleep -Seconds 5
+# Abrir SteamTools
+if (Test-Path $STEAMTOOLS_EXE) {
+    Start-Process -FilePath $STEAMTOOLS_EXE
+    Start-Sleep -Seconds 5
 
-Add-Type @"
+    Add-Type @"
 using System; using System.Runtime.InteropServices;
 public class MC {
     [DllImport("user32.dll")] public static extern void mouse_event(int f,int x,int y,int c,int e);
@@ -82,19 +82,20 @@ public class MC {
 }
 "@
 
-$st = Get-Process -Name "SteamTools" -ErrorAction SilentlyContinue
-if ($st -and $st.MainWindowHandle -ne 0) {
-    $r = New-Object MC+RECT
-    [MC]::GetWindowRect($st.MainWindowHandle,[ref]$r) | Out-Null
-    $x = [int](($r.Left+$r.Right)/2); $y = [int](($r.Top+$r.Bottom)/2)
-    $w = New-Object -ComObject wscript.shell
-    [MC]::RC($x,$y); Start-Sleep -Seconds 1
-    $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
-    $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
-    $w.SendKeys("{ENTER}"); Start-Sleep -Seconds 15
-    [MC]::RC($x,$y); Start-Sleep -Seconds 1
-    1..10 | ForEach-Object { $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 150 }
-    $w.SendKeys("{ENTER}")
+    $st = Get-Process -Name "SteamTools" -ErrorAction SilentlyContinue
+    if ($st -and $st.MainWindowHandle -ne 0) {
+        $r = New-Object MC+RECT
+        [MC]::GetWindowRect($st.MainWindowHandle,[ref]$r) | Out-Null
+        $x = [int](($r.Left+$r.Right)/2); $y = [int](($r.Top+$r.Bottom)/2)
+        $w = New-Object -ComObject wscript.shell
+        [MC]::RC($x,$y); Start-Sleep -Seconds 1
+        $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
+        $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
+        $w.SendKeys("{ENTER}"); Start-Sleep -Seconds 15
+        [MC]::RC($x,$y); Start-Sleep -Seconds 1
+        1..10 | ForEach-Object { $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 150 }
+        $w.SendKeys("{ENTER}")
+    }
 }
 
 Remove-Item $TEMP -Recurse -Force -ErrorAction SilentlyContinue
