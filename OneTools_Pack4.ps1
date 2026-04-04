@@ -1,14 +1,14 @@
 # ============================================================
-#  OneTools - Pack 4
+#  OneTools - Pack 4 Installer
+#  Descarga e instala todos los juegos del Pack 4
 # ============================================================
 
-$R2_BASE       = "https://pub-3969552ebd69440da9632dee8d18453b.r2.dev/pack4"
-$INSTALLER_URL = "https://raw.githubusercontent.com/JesusVite/OneTools/main/OneTools_Setup.exe"
-$DESTINO       = "${env:ProgramFiles(x86)}\Steam\config\stplug-in"
-$STEAMTOOLS_EXE = "C:\Program Files\SteamTools\SteamTools.exe"
-$STEAM_EXE     = "${env:ProgramFiles(x86)}\Steam\steam.exe"
-$TEMP          = "$env:TEMP\onetools_pack4"
+$BASE_URL = "https://pub-3969552ebd69440da9632dee8d18453b.r2.dev/pack4"
+$INSTALL_DIR = "C:\OneTools\Pack4"
+$LOG_FILE = "$INSTALL_DIR\pack4_log.txt"
+$TEMP_DIR = "$env:TEMP\OneTools_Pack4"
 
+# Lista de juegos del Pack 4
 $JUEGOS = @(
     "60 Second Strike.zip",
     "60 Seconds!.zip",
@@ -198,95 +198,112 @@ $JUEGOS = @(
     "Wo Long Fallen Dynasty.zip"
 )
 
-New-Item -ItemType Directory -Path $TEMP -Force | Out-Null
-if (-not (Test-Path $DESTINO)) { New-Item -ItemType Directory -Path $DESTINO -Force | Out-Null }
+# ============================================================
+#  FUNCIONES
+# ============================================================
 
-# PASO 1: Descargar e instalar OneTools_Setup.exe primero
-$installer = "$TEMP\setup.exe"
-(New-Object System.Net.WebClient).DownloadFile($INSTALLER_URL, $installer)
-Start-Process -FilePath $installer -ArgumentList "/S" -Wait
-Start-Sleep -Seconds 5
-
-# Esperar hasta que SteamTools.exe exista
-$intentos = 0
-while (-not (Test-Path $STEAMTOOLS_EXE) -and $intentos -lt 10) {
-    Start-Sleep -Seconds 2
-    $intentos++
+function Write-Log {
+    param([string]$Mensaje, [string]$Tipo = "INFO")
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $linea = "[$timestamp] [$Tipo] $Mensaje"
+    Write-Host $linea
+    Add-Content -Path $LOG_FILE -Value $linea
 }
 
-# PASO 2: Descargar los zips en paralelo desde R2
-$jobs = @()
-foreach ($nombre in $JUEGOS) {
-    $zipPath = "$TEMP\$nombre"
-    $encoded = [Uri]::EscapeDataString($nombre)
-    $dlUrl   = "$R2_BASE/$encoded"
-    $jobs += Start-Job -ScriptBlock {
-        param($url, $path)
-        (New-Object System.Net.WebClient).DownloadFile($url, $path)
-    } -ArgumentList $dlUrl, $zipPath
+function Encode-URL {
+    param([string]$Texto)
+    return [Uri]::EscapeDataString($Texto)
 }
 
-$jobs | Wait-Job | Out-Null
-$jobs | Remove-Job -Force
+function Descargar-Zip {
+    param([string]$NombreArchivo)
+    $nombreEncoded = Encode-URL $NombreArchivo
+    $url = "$BASE_URL/$nombreEncoded"
+    $destino = "$TEMP_DIR\$NombreArchivo"
 
-# Esperar hasta que SteamTools.exe exista
-$intentos = 0
-while (-not (Test-Path $STEAMTOOLS_EXE) -and $intentos -lt 10) {
-    Start-Sleep -Seconds 2
-    $intentos++
-}
-
-# Extraer y copiar a stplug-in
-foreach ($nombre in $JUEGOS) {
-    $zipPath = "$TEMP\$nombre"
-    $extract = "$TEMP\ext"
-    if (Test-Path $zipPath) {
-        New-Item -ItemType Directory -Path $extract -Force | Out-Null
-        Expand-Archive -Path $zipPath -DestinationPath $extract -Force
-        Get-ChildItem -Path $extract -Recurse -Include "*.lua","*.manifest" | ForEach-Object {
-            Copy-Item $_.FullName "$DESTINO\$($_.Name)" -Force
-        }
-        Remove-Item $zipPath,$extract -Recurse -Force -ErrorAction SilentlyContinue
+    try {
+        Write-Log "Descargando: $NombreArchivo"
+        $wc = New-Object System.Net.WebClient
+        $wc.DownloadFile($url, $destino)
+        Write-Log "OK: $NombreArchivo" "OK"
+        return $true
+    } catch {
+        Write-Log "ERROR descargando $NombreArchivo : $_" "ERROR"
+        return $false
     }
 }
 
-# Abrir Steam
-if (Test-Path $STEAM_EXE) {
-    Start-Process -FilePath $STEAM_EXE
-    Start-Sleep -Seconds 5
-}
+function Instalar-Zip {
+    param([string]$NombreArchivo)
+    $zipPath = "$TEMP_DIR\$NombreArchivo"
+    $nombreJuego = [System.IO.Path]::GetFileNameWithoutExtension($NombreArchivo)
+    $destino = "$INSTALL_DIR\$nombreJuego"
 
-# Abrir SteamTools
-if (Test-Path $STEAMTOOLS_EXE) {
-    Start-Process -FilePath $STEAMTOOLS_EXE
-    Start-Sleep -Seconds 5
-
-    Add-Type @"
-using System; using System.Runtime.InteropServices;
-public class MC {
-    [DllImport("user32.dll")] public static extern void mouse_event(int f,int x,int y,int c,int e);
-    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h,out RECT r);
-    public struct RECT{public int Left,Top,Right,Bottom;}
-    public static void RC(int x,int y){SetCursorPos(x,y);System.Threading.Thread.Sleep(300);mouse_event(8,x,y,0,0);System.Threading.Thread.Sleep(150);mouse_event(16,x,y,0,0);}
-}
-"@
-
-    $st = Get-Process -Name "SteamTools" -ErrorAction SilentlyContinue
-    if ($st -and $st.MainWindowHandle -ne 0) {
-        $r = New-Object MC+RECT
-        [MC]::GetWindowRect($st.MainWindowHandle,[ref]$r) | Out-Null
-        $x = [int](($r.Left+$r.Right)/2); $y = [int](($r.Top+$r.Bottom)/2)
-        $w = New-Object -ComObject wscript.shell
-        [MC]::RC($x,$y); Start-Sleep -Seconds 1
-        $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
-        $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
-        $w.SendKeys("{ENTER}"); Start-Sleep -Seconds 15
-        [MC]::RC($x,$y); Start-Sleep -Seconds 1
-        1..10 | ForEach-Object { $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 150 }
-        $w.SendKeys("{ENTER}")
+    try {
+        Write-Log "Extrayendo: $nombreJuego"
+        Expand-Archive -Path $zipPath -DestinationPath $destino -Force
+        Remove-Item $zipPath -Force
+        Write-Log "Instalado: $nombreJuego" "OK"
+        return $true
+    } catch {
+        Write-Log "ERROR instalando $nombreJuego : $_" "ERROR"
+        return $false
     }
 }
 
-Remove-Item $TEMP -Recurse -Force -ErrorAction SilentlyContinue
-exit
+# ============================================================
+#  INICIO
+# ============================================================
+
+Clear-Host
+Write-Host "============================================" -ForegroundColor Yellow
+Write-Host "   OneTools - Pack 4 Installer" -ForegroundColor Yellow
+Write-Host "   $($JUEGOS.Count) juegos incluidos" -ForegroundColor Yellow
+Write-Host "============================================" -ForegroundColor Yellow
+Write-Host ""
+
+# Crear directorios
+New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
+New-Item -ItemType Directory -Force -Path $TEMP_DIR | Out-Null
+
+Write-Log "Iniciando instalacion de Pack 4 - $($JUEGOS.Count) juegos"
+
+$exitosos = 0
+$fallidos = 0
+$contador = 0
+
+foreach ($juego in $JUEGOS) {
+    $contador++
+    $porcentaje = [math]::Round(($contador / $JUEGOS.Count) * 100)
+    Write-Host ""
+    Write-Host "[$contador/$($JUEGOS.Count)] ($porcentaje%) " -NoNewline -ForegroundColor Cyan
+    Write-Host $juego -ForegroundColor White
+
+    $descargaOK = Descargar-Zip $juego
+    if ($descargaOK) {
+        $instalacionOK = Instalar-Zip $juego
+        if ($instalacionOK) { $exitosos++ } else { $fallidos++ }
+    } else {
+        $fallidos++
+    }
+}
+
+# ============================================================
+#  RESUMEN
+# ============================================================
+
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Yellow
+Write-Host "   INSTALACION COMPLETADA" -ForegroundColor Green
+Write-Host "   Exitosos : $exitosos" -ForegroundColor Green
+Write-Host "   Fallidos : $fallidos" -ForegroundColor Red
+Write-Host "   Log      : $LOG_FILE" -ForegroundColor Gray
+Write-Host "============================================" -ForegroundColor Yellow
+Write-Host ""
+Write-Log "Instalacion finalizada. Exitosos: $exitosos | Fallidos: $fallidos"
+
+# Limpiar temp
+Remove-Item $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
+
+Write-Host "Presiona cualquier tecla para salir..." -ForegroundColor Gray
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
