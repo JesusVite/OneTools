@@ -81,30 +81,32 @@ while (-not (Test-Path $STEAMTOOLS_EXE) -and $intentos -lt 10) {
 }
 Write-Host "      Listo!" -ForegroundColor Green
 
-# PASO 2: Descargar zips desde Cloudflare R2
+# PASO 2: Descargar zips desde Cloudflare R2 en lotes de 10
 Write-Host ""
 Write-Host "[2/4] Descargando $($JUEGOS.Count) juegos desde servidor..." -ForegroundColor Cyan
 
-$jobs = @()
-foreach ($nombre in $JUEGOS) {
-    $zipPath = "$TEMP\$nombre"
-    $encoded = [Uri]::EscapeDataString($nombre)
-    $dlUrl   = "$R2_BASE/$encoded"
-    $jobs += Start-Job -ScriptBlock {
-        param($url, $path)
-        (New-Object System.Net.WebClient).DownloadFile($url, $path)
-    } -ArgumentList $dlUrl, $zipPath
-}
+$total = $JUEGOS.Count
+$completados = 0
+$lote = 10
 
-$total = $jobs.Count
-while ($jobs | Where-Object { $_.State -eq "Running" }) {
-    $completados = ($jobs | Where-Object { $_.State -eq "Completed" }).Count
+for ($i = 0; $i -lt $total; $i += $lote) {
+    $bloque = $JUEGOS[$i..([math]::Min($i + $lote - 1, $total - 1))]
+    $jobs = @()
+    foreach ($nombre in $bloque) {
+        $zipPath = "$TEMP\$nombre"
+        $encoded = [Uri]::EscapeDataString($nombre)
+        $dlUrl   = "$R2_BASE/$encoded"
+        $jobs += Start-Job -ScriptBlock {
+            param($url, $path)
+            (New-Object System.Net.WebClient).DownloadFile($url, $path)
+        } -ArgumentList $dlUrl, $zipPath
+    }
+    $jobs | Wait-Job | Out-Null
+    $jobs | Remove-Job -Force
+    $completados += $bloque.Count
     $pct = [math]::Round(($completados / $total) * 100)
     Write-Host "`r      Progreso: $completados/$total ($pct%)   " -NoNewline -ForegroundColor White
-    Start-Sleep -Seconds 1
 }
-$jobs | Wait-Job | Out-Null
-$jobs | Remove-Job -Force
 Write-Host "`r      Descarga completa! $total/$total (100%)   " -ForegroundColor Green
 
 # PASO 3: Extraer y copiar a stplug-in
