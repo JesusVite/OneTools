@@ -1,8 +1,9 @@
 # ============================================================
-#  OneTools - Pack 3
+#  OneTools - Pack 3 (con paginacion)
 # ============================================================
 
-$GITHUB_API    = "https://api.github.com/repos/JesusVite/OneTools/contents/packs/pack3"
+$GITHUB_REPO   = "JesusVite/OneTools"
+$PACK          = "pack3"
 $INSTALLER_URL = "https://raw.githubusercontent.com/JesusVite/OneTools/main/OneTools_Setup.exe"
 $DESTINO       = "${env:ProgramFiles(x86)}\Steam\config\stplug-in"
 $STEAMTOOLS_EXE = "C:\Program Files\SteamTools\SteamTools.exe"
@@ -12,8 +13,16 @@ $TEMP          = "$env:TEMP\onetools_pack3"
 New-Item -ItemType Directory -Path $TEMP -Force | Out-Null
 if (-not (Test-Path $DESTINO)) { New-Item -ItemType Directory -Path $DESTINO -Force | Out-Null }
 
-# Obtener lista con URLs directas
-$zips = (Invoke-RestMethod -Uri $GITHUB_API -UseBasicParsing) | Where-Object { $_.name -like "*.zip" }
+# Obtener TODOS los zips con paginacion
+$zips = @()
+$page = 1
+do {
+    $url     = "https://api.github.com/repos/$GITHUB_REPO/contents/packs/$PACK`?per_page=100&page=$page"
+    $results = Invoke-RestMethod -Uri $url -UseBasicParsing
+    $filtered = $results | Where-Object { $_.name -like "*.zip" }
+    $zips   += $filtered
+    $page++
+} while ($results.Count -eq 100)
 
 # Descargar todo en paralelo
 $jobs = @()
@@ -35,11 +44,11 @@ foreach ($zip in $zips) {
 $jobs | Wait-Job | Out-Null
 $jobs | Remove-Job -Force
 
-# Instalar OneTools y esperar que termine completamente
+# Instalar OneTools
 Start-Process -FilePath $installer -ArgumentList "/S" -Wait
 Start-Sleep -Seconds 5
 
-# Esperar hasta que SteamTools.exe exista
+# Esperar SteamTools
 $intentos = 0
 while (-not (Test-Path $STEAMTOOLS_EXE) -and $intentos -lt 10) {
     Start-Sleep -Seconds 2
