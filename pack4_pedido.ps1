@@ -414,20 +414,42 @@ public class MC {
     [DllImport("user32.dll")] public static extern void mouse_event(int f,int x,int y,int c,int e);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h,out RECT r);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr h);
     public struct RECT{public int Left,Top,Right,Bottom;}
     public static void RC(int x,int y){SetCursorPos(x,y);System.Threading.Thread.Sleep(300);mouse_event(8,x,y,0,0);System.Threading.Thread.Sleep(150);mouse_event(16,x,y,0,0);}
 }
 "@
-    $st = Get-Process -Name "SteamTools" -ErrorAction SilentlyContinue
+    $intentosST = 0
+    do {
+        Start-Sleep -Seconds 2
+        $st = Get-Process -Name "SteamTools" -ErrorAction SilentlyContinue
+        $intentosST++
+    } while ((-not $st -or $st.MainWindowHandle -eq 0) -and $intentosST -lt 15)
+
     if ($st -and $st.MainWindowHandle -ne 0) {
+        [MC]::SetForegroundWindow($st.MainWindowHandle) | Out-Null
+        [MC]::SetFocus($st.MainWindowHandle) | Out-Null
+        Start-Sleep -Seconds 1
+
         $r = New-Object MC+RECT
         [MC]::GetWindowRect($st.MainWindowHandle,[ref]$r) | Out-Null
         $x = [int](($r.Left+$r.Right)/2); $y = [int](($r.Top+$r.Bottom)/2)
-        $w = New-Object -ComObject wscript.shell
+
         [MC]::RC($x,$y); Start-Sleep -Seconds 1
+
+        $w = New-Object -ComObject wscript.shell
+        $w.AppActivate($st.Id) | Out-Null
+        Start-Sleep -Milliseconds 500
+
         $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
         $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
         $w.SendKeys("{ENTER}"); Start-Sleep -Seconds 15
+
+        [MC]::SetForegroundWindow($st.MainWindowHandle) | Out-Null
+        $w.AppActivate($st.Id) | Out-Null
+        Start-Sleep -Milliseconds 500
+
         [MC]::RC($x,$y); Start-Sleep -Seconds 1
         1..10 | ForEach-Object { $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 150 }
         $w.SendKeys("{ENTER}")
