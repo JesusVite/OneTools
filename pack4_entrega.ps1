@@ -56,7 +56,26 @@ $JUEGOS = @(
     "SPIDERMAN MILES MORALES.zip","Stray.zip","TEKKEN 7.zip","TEKKEN 8.zip",
     "Terraria.zip","The Binding of Isaac Rebirth.zip","The Forest.zip","THE KING OF FIGHTERS 2002 UNLIMITED MATCH.zip",
     "The Last of Us™ Part I.zip","The Last of Us™ Part II Remastered.zip","Tom Clancy's Ghost Recon® Wildlands.zip",
-    "UNCHARTED™ Legacy of Thieves Collection.zip","Until Then.zip","Wo Long Fallen Dynasty.zip"
+    "UNCHARTED™ Legacy of Thieves Collection.zip","Until Then.zip","Wo Long Fallen Dynasty.zip",
+    "Disneyland Adventures.zip","Dispatch.zip","DOOM + DOOM II.zip","DOOM Eternal.zip",
+    "Door Kickers 2.zip","DRAGON BALL XENOVERSE 2.zip","DRAGON BALL XENOVERSE.zip","DRAGON QUEST BUILDERS™ 2.zip",
+    "Dragon's Dogma Dark Arisen.zip","DreadOut 2.zip","DreadOut Keepers of The Dark.zip","DreadOut Remastered Collection.zip",
+    "DreadOut.zip","Dune Imperium.zip","Dying Light 2 Reloaded Edition.zip","Dying Light The Beast.zip",
+    "Dying Light.zip","DYSMANTLE.zip","ENDER LILIES Quietus of the Knights.zip","ENDER MAGNOLIA.zip",
+    "Enshrouded.zip","Erica.zip","Escape from Duckov.zip","Euro Truck Simulator 2.zip",
+    "Europa Universalis IV.zip","EVERSPACE™ 2.zip","EVERSPACE™.zip","Evil West.zip",
+    "Exit the Gungeon.zip","Fable Anniversary.zip","Factorio.zip","FAIRY TAIL.zip",
+    "Fallout 2.zip","Fallout 4.zip","Fallout.zip","FAR Lone Sails.zip",
+    "Farming Simulator 19.zip","Farming Simulator 22.zip","Farming Simulator 25.zip","FINAL FANTASY II.zip",
+    "FINAL FANTASY III.zip","FINAL FANTASY IV (3D Remake).zip","FINAL FANTASY IV THE AFTER YEARS.zip","FINAL FANTASY IV.zip",
+    "FINAL FANTASY IX.zip","FINAL FANTASY V.zip","FINAL FANTASY VI.zip","FINAL FANTASY VII REMAKE INTERGRADE.zip",
+    "FINAL FANTASY XIII.zip","FINAL FANTASY.zip","Firefight.zip","Firewatch.zip",
+    "Fireworks Mania.zip","Flashing Lights.zip","FlatOut 2.zip","Forager.zip",
+    "Forza Horizon 5.zip","Frostpunk.zip","Game Dev Tycoon.zip","Garfield Kart.zip",
+    "Garry's Mod.zip","Gears of War Reloaded.zip","Geometry Dash.zip","Getting Over It.zip",
+    "Ghost of a Tale.zip","Ghostrunner.zip","Goat Simulator 3.zip","Goat Simulator.zip",
+    "Granny.zip","GreedFall.zip","Grounded.zip","Gunsmith Simulator.zip",
+    "Guts and Glory.zip","GYLT.zip","Hades.zip"
 )
 
 Clear-Host
