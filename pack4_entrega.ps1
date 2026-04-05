@@ -202,14 +202,12 @@ public class MC {
 
         $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
         $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
-        $w.SendKeys("{ENTER}"); Start-Sleep -Seconds 15
+        $w.SendKeys("{ENTER}"); Start-Sleep -Seconds 20
 
-        # Forzar foco nuevamente para el segundo bloque
-        [MC]::SetForegroundWindow($st.MainWindowHandle) | Out-Null
+        # Steam se reinicio - SteamTools sigue flotando, hacer click directo en el overlay
+        [MC]::RC($x,$y); Start-Sleep -Seconds 1
         $w.AppActivate($st.Id) | Out-Null
         Start-Sleep -Milliseconds 500
-
-        [MC]::RC($x,$y); Start-Sleep -Seconds 1
         1..10 | ForEach-Object { $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 150 }
         $w.SendKeys("{ENTER}")
     }
