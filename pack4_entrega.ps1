@@ -75,7 +75,20 @@ $JUEGOS = @(
     "Garry's Mod.zip","Gears of War Reloaded.zip","Geometry Dash.zip","Getting Over It.zip",
     "Ghost of a Tale.zip","Ghostrunner.zip","Goat Simulator 3.zip","Goat Simulator.zip",
     "Granny.zip","GreedFall.zip","Grounded.zip","Gunsmith Simulator.zip",
-    "Guts and Glory.zip","GYLT.zip","Hades.zip"
+    "Guts and Glory.zip","GYLT.zip","Hades.zip",
+    "Hades II.zip","Half-Life 2.zip","Half-Life Alyx.zip","Half-Life Blue Shift.zip",
+    "Half-Life Opposing Force.zip","Half-Life Source.zip","Halo Wars Definitive Edition.zip","Hearts of Iron IV.zip",
+    "Hellblade Senua's Sacrifice.zip","HELLDIVERS™.zip","Hello Neighbor Hide and Seek.zip","Hi-Fi RUSH.zip",
+    "Hidden Deep.zip","High On Life.zip","Home Sweet Home.zip","Horizon Zero Dawn™ Remastered.zip",
+    "Hotline Miami 2.zip","Hotline Miami.zip","House Flipper.zip","HumanitZ.zip",
+    "Hunting Simulator 2.zip","INAZUMA ELEVEN Victory Road.zip","Indiana Jones and the Fate of Atlantis.zip","Indiana Jones and the Great Circle.zip",
+    "Injustice 2.zip","Injustice Gods Among Us.zip","INSIDE.zip","Is This Seat Taken.zip",
+    "It Takes Two.zip","Jotun.zip","Journey.zip","Just Cause 3.zip",
+    "Just Cause.zip","Kaku Ancient Seal.zip","Katana ZERO.zip","Kena Bridge of Spirits.zip",
+    "Kenshi.zip","Kerbal Space Program 2.zip","Kerbal Space Program.zip","Kingdom Come Deliverance II.zip",
+    "Kingdom Come Deliverance.zip","Kingdom Rush 5.zip","Kingdom Rush.zip","Kingdoms of Amalur.zip",
+    "Klonoa Phantasy Reverie.zip","Left 4 Dead 2.zip","LEGO Batman 2.zip","LEGO Batman 3.zip",
+    "LEGO Batman The Videogame.zip","LEGO City Undercover.zip"
 )
 
 Clear-Host
