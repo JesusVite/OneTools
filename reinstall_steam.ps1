@@ -18,7 +18,7 @@ New-Item -ItemType Directory -Path $TEMP -Force | Out-Null
 # PASO 1: Cerrar Steam
 Write-Host "[1/4] Cerrando Steam..." -ForegroundColor Cyan
 Get-Process -Name "steam" -ErrorAction SilentlyContinue | Stop-Process -Force
-Get-Process -Name "SteamService" -ErrorAction SilentlyContinue | Stop-Process -Force
+Stop-Service -Name "SteamService" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 Write-Host "      Listo!" -ForegroundColor Green
 
