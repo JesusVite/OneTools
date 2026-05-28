@@ -139,6 +139,15 @@ for ($i = 1; $i -le $MAX_INTENTOS; $i++) {
             Start-Sleep -Seconds 5
             exit 1
         }
+        'rate_limited' {
+            Write-Host ""
+            Write-Host "============================================" -ForegroundColor Red
+            Write-Host "  $($res.mensaje)" -ForegroundColor Red
+            Write-Host "============================================" -ForegroundColor Red
+            $env:ONETOOLS_SESSION = $null
+            Start-Sleep -Seconds 5
+            exit 1
+        }
         default {
             Write-Host "  Respuesta inesperada: $($res | ConvertTo-Json -Compress)" -ForegroundColor Red
         }

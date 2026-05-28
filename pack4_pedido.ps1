@@ -121,6 +121,15 @@ if (-not $autorizado) {
                 Start-Sleep -Seconds 5
                 exit 1
             }
+            'rate_limited' {
+                Write-Host ""
+                Write-Host "============================================" -ForegroundColor Red
+                Write-Host "  $($res.mensaje)" -ForegroundColor Red
+                Write-Host "============================================" -ForegroundColor Red
+                $env:ONETOOLS_SESSION = $null
+                Start-Sleep -Seconds 5
+                exit 1
+            }
             default {
                 Write-Host "  Respuesta inesperada del servidor." -ForegroundColor Red
             }
@@ -697,6 +706,25 @@ Write-Host "============================================" -ForegroundColor Yello
 Write-Host ""
 Write-Host "Recordatorio: abre Steam y OneTools manualmente" -ForegroundColor DarkGray
 Write-Host "para que los juegos aparezcan en tu biblioteca." -ForegroundColor DarkGray
+
+# Registrar descarga en auditoria de Supabase (silencioso, no rompe si falla).
+try {
+    if ($codigoUsado) {
+        $auditHeaders = @{
+            'apikey'        = $SUPABASE_KEY
+            'Authorization' = "Bearer $SUPABASE_KEY"
+            'Content-Type'  = 'application/json'
+        }
+        $auditBody = @{
+            p_codigo    = $codigoUsado
+            p_device_id = $deviceId
+            p_juegos    = @($JUEGOS)
+        } | ConvertTo-Json -Compress
+        Invoke-RestMethod -Method POST `
+            -Uri "$SUPABASE_URL/rest/v1/rpc/registrar_descarga" `
+            -Headers $auditHeaders -Body $auditBody -TimeoutSec 10 | Out-Null
+    }
+} catch { }
 
 # Limpiar la sesion al terminar (no dejar residuo en variables de entorno)
 $env:ONETOOLS_SESSION = $null
