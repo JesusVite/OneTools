@@ -576,14 +576,56 @@ Write-Host ""
 New-Item -ItemType Directory -Path $TEMP -Force | Out-Null
 if (-not (Test-Path $DESTINO)) { New-Item -ItemType Directory -Path $DESTINO -Force | Out-Null }
 
-# PASO 1: Descargar zips seleccionados (en paralelo)
+# PASO 1: Obtener URLs firmadas desde la Edge Function y descargar.
+# Ya NO descargamos directo desde R2 publico: pasamos por el servidor
+# que valida el codigo y firma URLs con expiracion (5 min).
 Write-Host "[1/3] Descargando $($JUEGOS.Count) juego(s)..." -ForegroundColor Cyan
 
+$signHeaders = @{
+    'apikey'        = $SUPABASE_KEY
+    'Authorization' = "Bearer $SUPABASE_KEY"
+    'Content-Type'  = 'application/json'
+}
+$signBody = @{
+    codigo    = $codigoUsado
+    device_id = $deviceId
+    juegos    = @($JUEGOS)
+} | ConvertTo-Json -Compress
+
+$urlsFirmadas = $null
+try {
+    $signResp = Invoke-RestMethod -Method POST `
+        -Uri "$SUPABASE_URL/functions/v1/firmar-descarga" `
+        -Headers $signHeaders -Body $signBody -TimeoutSec 30
+
+    if (-not $signResp.ok) {
+        Write-Host "      Error: $($signResp.mensaje)" -ForegroundColor Red
+        $env:ONETOOLS_SESSION = $null
+        Start-Sleep -Seconds 5
+        exit 1
+    }
+    $urlsFirmadas = $signResp.urls
+} catch {
+    Write-Host "      Error al contactar el servidor: $($_.Exception.Message)" -ForegroundColor Red
+    $env:ONETOOLS_SESSION = $null
+    Start-Sleep -Seconds 5
+    exit 1
+}
+
+# Convertir el objeto JSON a hashtable para acceso seguro
+# (los nombres tienen espacios, apostrofes, simbolos como ™ etc).
+$urlsTabla = @{}
+$urlsFirmadas.PSObject.Properties | ForEach-Object { $urlsTabla[$_.Name] = $_.Value }
+
+# Descargar con jobs paralelos usando las URLs firmadas
 $jobs = @()
 foreach ($nombre in $JUEGOS) {
     $zipPath = "$TEMP\$nombre"
-    $encoded = [Uri]::EscapeDataString($nombre)
-    $dlUrl   = "$R2_BASE/$encoded"
+    $dlUrl   = $urlsTabla[$nombre]
+    if (-not $dlUrl) {
+        Write-Host "      Sin URL para: $nombre" -ForegroundColor Yellow
+        continue
+    }
     $jobs += Start-Job -ScriptBlock {
         param($url, $path)
         (New-Object System.Net.WebClient).DownloadFile($url, $path)
