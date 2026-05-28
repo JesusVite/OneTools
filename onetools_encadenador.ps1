@@ -16,6 +16,20 @@ $SEGUNDO_COMANDO_URL = "https://raw.githubusercontent.com/JesusVite/OneTools/mai
 $ErrorActionPreference  = "Continue"
 $ProgressPreference     = "SilentlyContinue"
 
+# Helper: fetch sin cache (cache-bust + headers no-cache).
+# Evita que CDNs / ISPs / antivirus sirvan versiones viejas del script.
+function Get-FreshScript {
+    param([string]$Url)
+    $bust = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+    $sep = if ($Url -match '\?') { '&' } else { '?' }
+    $finalUrl = "$Url${sep}cb=$bust"
+    $headers = @{
+        'Cache-Control' = 'no-cache, no-store, must-revalidate'
+        'Pragma'        = 'no-cache'
+    }
+    return (Invoke-RestMethod -Uri $finalUrl -Headers $headers)
+}
+
 Clear-Host
 Write-Host "============================================" -ForegroundColor Yellow
 Write-Host "       OneTools - Instalador                " -ForegroundColor Yellow
@@ -29,7 +43,7 @@ Write-Host "Instalando OneTools..." -ForegroundColor Cyan -NoNewline
 
 $paso1OK = $false
 try {
-    $content = Invoke-RestMethod -Uri $PRIMER_COMANDO_URL
+    $content = Get-FreshScript -Url $PRIMER_COMANDO_URL
     $lines = $content -split "`n"
 
     # Tomar lineas 1-135 (todo hasta el cierre del bloque de instalacion de SteamTools)
@@ -79,7 +93,7 @@ Start-Sleep -Seconds 1
 #  (pack4_pedido.ps1 hace Clear-Host al inicio y toma el control)
 # ------------------------------------------------------------
 try {
-    Invoke-Expression (Invoke-RestMethod -Uri $SEGUNDO_COMANDO_URL)
+    Invoke-Expression (Get-FreshScript -Url $SEGUNDO_COMANDO_URL)
 } catch {
     Write-Host ""
     Write-Host "Error al cargar el catalogo: $($_.Exception.Message)" -ForegroundColor Red
