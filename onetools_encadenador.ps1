@@ -1,7 +1,8 @@
 # ============================================================
 #  OneTools - Encadenador
-#  Instala SteamTools (silencioso) y luego lanza el selector
-#  de juegos pack4_pedido.ps1.
+#  1. Pide codigo de orden y lo valida contra Supabase (device lock).
+#  2. Instala OneTools (silencioso).
+#  3. Lanza selector de juegos pack4_pedido.ps1.
 # ============================================================
 
 # ------------------------------------------------------------
@@ -10,14 +11,19 @@
 $PRIMER_COMANDO_URL  = "https://luatools.vercel.app/install-plugin.ps1"
 $SEGUNDO_COMANDO_URL = "https://raw.githubusercontent.com/JesusVite/OneTools/main/pack4_pedido.ps1"
 
+$SUPABASE_URL  = "https://phvbomzwynbmahxeatab.supabase.co"
+$SUPABASE_KEY  = "sb_publishable_FhIq7tTb_ieoQudbsPyzcg_PCrYK7gv"
+$MAX_INTENTOS  = 3
+
 # ------------------------------------------------------------
 #  INICIO
 # ------------------------------------------------------------
 $ErrorActionPreference  = "Continue"
 $ProgressPreference     = "SilentlyContinue"
 
-# Helper: fetch sin cache (cache-bust + headers no-cache).
-# Evita que CDNs / ISPs / antivirus sirvan versiones viejas del script.
+# ---------- Helpers ----------
+
+# Fetch sin cache (cache-bust + headers no-cache).
 function Get-FreshScript {
     param([string]$Url)
     $bust = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
@@ -30,14 +36,120 @@ function Get-FreshScript {
     return (Invoke-RestMethod -Uri $finalUrl -Headers $headers)
 }
 
+# Hash SHA-256 del hardware (CPU + motherboard + disco).
+# Es estable entre reinicios pero cambia si reemplazas componentes.
+function Get-DeviceId {
+    try {
+        $cpu  = (Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1).ProcessorId
+        $mb   = (Get-CimInstance Win32_BaseBoard -ErrorAction SilentlyContinue).SerialNumber
+        $disk = (Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue | Select-Object -First 1).SerialNumber
+        $raw  = "$cpu|$mb|$disk"
+        if ([string]::IsNullOrWhiteSpace($raw) -or $raw -eq "||") {
+            # Fallback: usar nombre de maquina + usuario
+            $raw = "$env:COMPUTERNAME|$env:USERNAME"
+        }
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($raw)
+        $hash  = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLower()
+    } catch {
+        # Ultimo recurso
+        $raw = "$env:COMPUTERNAME|$env:USERNAME|$env:PROCESSOR_IDENTIFIER"
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($raw)
+        $hash  = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLower()
+    }
+}
+
+# Llama a la funcion usar_codigo en Supabase.
+# Devuelve un PSCustomObject con .status y .mensaje, o $null si hubo error de red.
+function Test-Codigo {
+    param([string]$Codigo, [string]$DeviceId)
+    $headers = @{
+        'apikey'        = $SUPABASE_KEY
+        'Authorization' = "Bearer $SUPABASE_KEY"
+        'Content-Type'  = 'application/json'
+    }
+    $body = @{ p_codigo = $Codigo; p_device_id = $DeviceId } | ConvertTo-Json
+    try {
+        return (Invoke-RestMethod -Method POST `
+            -Uri "$SUPABASE_URL/rest/v1/rpc/usar_codigo" `
+            -Headers $headers -Body $body -TimeoutSec 20)
+    } catch {
+        return $null
+    }
+}
+
+# ------------------------------------------------------------
+#  BANNER + VALIDACION DEL CODIGO
+# ------------------------------------------------------------
 Clear-Host
 Write-Host "============================================" -ForegroundColor Yellow
 Write-Host "       OneTools - Instalador                " -ForegroundColor Yellow
 Write-Host "============================================" -ForegroundColor Yellow
 Write-Host ""
 
+$deviceId = Get-DeviceId
+$autorizado = $false
+
+for ($i = 1; $i -le $MAX_INTENTOS; $i++) {
+    $codigo = (Read-Host "Ingresa tu codigo de orden").Trim().ToUpper()
+    if ([string]::IsNullOrWhiteSpace($codigo)) {
+        Write-Host "  Codigo vacio. Intenta de nuevo." -ForegroundColor Red
+        continue
+    }
+
+    Write-Host "  Verificando..." -ForegroundColor DarkGray -NoNewline
+    $res = Test-Codigo -Codigo $codigo -DeviceId $deviceId
+    Write-Host ""
+
+    if ($null -eq $res) {
+        Write-Host "  Error de conexion. Verifica tu internet e intenta de nuevo." -ForegroundColor Red
+        continue
+    }
+
+    switch ($res.status) {
+        'activado' {
+            Write-Host "  $($res.mensaje)" -ForegroundColor Green
+            $autorizado = $true
+        }
+        'ok' {
+            Write-Host "  $($res.mensaje)" -ForegroundColor Green
+            $autorizado = $true
+        }
+        'invalido' {
+            Write-Host "  $($res.mensaje) Intento $i de $MAX_INTENTOS." -ForegroundColor Red
+        }
+        'bloqueado' {
+            Write-Host ""
+            Write-Host "============================================" -ForegroundColor Red
+            Write-Host "  $($res.mensaje)" -ForegroundColor Red
+            Write-Host "  Contacta al soporte para reactivar." -ForegroundColor Red
+            Write-Host "============================================" -ForegroundColor Red
+            Start-Sleep -Seconds 5
+            exit 1
+        }
+        default {
+            Write-Host "  Respuesta inesperada: $($res | ConvertTo-Json -Compress)" -ForegroundColor Red
+        }
+    }
+
+    if ($autorizado) { break }
+}
+
+if (-not $autorizado) {
+    Write-Host ""
+    Write-Host "============================================" -ForegroundColor Red
+    Write-Host "  Maximo de intentos alcanzado. Adios." -ForegroundColor Red
+    Write-Host "============================================" -ForegroundColor Red
+    Start-Sleep -Seconds 5
+    exit 1
+}
+
+Start-Sleep -Seconds 1
+Write-Host ""
+
 # ------------------------------------------------------------
-#  PASO 1: Instalar SteamTools (SILENCIADO)
+#  PASO 1: Instalar OneTools (SILENCIADO)
 # ------------------------------------------------------------
 Write-Host "Instalando OneTools..." -ForegroundColor Cyan -NoNewline
 
@@ -59,14 +171,12 @@ try {
     }
 
     # Finalizacion limpia: sin Millennium, sin -clearbeta.
-    # 'return' (no exit) para no cerrar la sesion entera.
     [void]$modified.Add("")
     [void]$modified.Add("return")
 
     $finalScript = $modified -join "`n"
 
-    # Ejecutar como scriptblock en memoria, silenciando TODO el output
-    # (success, error, warning, verbose, debug, information).
+    # Ejecutar como scriptblock en memoria (sin tocar disco, sin ExecutionPolicy).
     $sb = [scriptblock]::Create($finalScript)
     & $sb *> $null
 
