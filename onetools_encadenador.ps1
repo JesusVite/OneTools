@@ -82,6 +82,13 @@ function Test-Codigo {
 # ------------------------------------------------------------
 #  BANNER + VALIDACION DEL CODIGO
 # ------------------------------------------------------------
+# Forzar el titulo de la ventana a "OneTools" desde el inicio.
+# Los scripts externos (luatools install-plugin, manifests) lo cambian
+# a "Luatools plugin installer" / "Steam Manifest Downloader" y eso
+# se ve aunque silenciemos su output con *> $null.
+$tituloOriginal = $Host.UI.RawUI.WindowTitle
+$Host.UI.RawUI.WindowTitle = "OneTools"
+
 Clear-Host
 Write-Host "============================================" -ForegroundColor Yellow
 Write-Host "       OneTools - Instalador                " -ForegroundColor Yellow
@@ -180,8 +187,17 @@ try {
         $modified[117] = '    # [silenced]'
     }
 
+    # Re-branding: reemplazar cualquier WindowTitle por "OneTools" para que
+    # el cliente no vea menciones a la competencia en la barra de la ventana.
+    for ($j = 0; $j -lt $modified.Count; $j++) {
+        if ($modified[$j] -match '\$Host\.UI\.RawUI\.WindowTitle') {
+            $modified[$j] = '$Host.UI.RawUI.WindowTitle = "OneTools"'
+        }
+    }
+
     # Finalizacion limpia: sin Millennium, sin -clearbeta.
     [void]$modified.Add("")
+    [void]$modified.Add('$Host.UI.RawUI.WindowTitle = "OneTools"')
     [void]$modified.Add("return")
 
     $finalScript = $modified -join "`n"
@@ -189,6 +205,9 @@ try {
     # Ejecutar como scriptblock en memoria (sin tocar disco, sin ExecutionPolicy).
     $sb = [scriptblock]::Create($finalScript)
     & $sb *> $null
+
+    # Re-forzar el titulo por si algun strand del script lo cambio antes del re-brand inyectado.
+    $Host.UI.RawUI.WindowTitle = "OneTools"
 
     $paso1OK = $true
 } catch {

@@ -11,6 +11,9 @@ $R2_BASE  = "https://pub-3969552ebd69440da9632dee8d18453b.r2.dev/pack4"
 $DESTINO  = "${env:ProgramFiles(x86)}\Steam\config\stplug-in"
 $TEMP     = "$env:TEMP\onetools_pedido"
 
+# Forzar titulo de ventana a "OneTools" (los scripts externos lo cambian).
+$Host.UI.RawUI.WindowTitle = "OneTools"
+
 # ------------------------------------------------------------
 #  VALIDACION DE ACCESO (segunda capa anti-bypass)
 # ------------------------------------------------------------
@@ -637,8 +640,8 @@ if ($APP_IDS.Count -gt 0) {
         $mfLines = $mfContent -split "`n"
 
         # Parchear: forzar modo=1 (GitHub), salir al final (nextChoice=2),
-        # neutralizar ReadKey de Exit-WithPrompt, y reemplazar 'exit N' por 'return'
-        # para que un fallo en un AppID no cierre la sesion del cliente entera.
+        # neutralizar ReadKey de Exit-WithPrompt, reemplazar 'exit N' por 'return',
+        # y re-brandear el WindowTitle a "OneTools" (lo unico que se ve aunque silenciemos).
         for ($i = 0; $i -lt $mfLines.Count; $i++) {
             if ($mfLines[$i] -match '\$modeChoice\s*=\s*Read-Host') {
                 $mfLines[$i] = '    $modeChoice = "1"'
@@ -649,15 +652,15 @@ if ($APP_IDS.Count -gt 0) {
             elseif ($mfLines[$i] -match '\$Host\.UI\.RawUI\.ReadKey') {
                 $mfLines[$i] = '    # [removed by encadenador]'
             }
+            elseif ($mfLines[$i] -match '\$Host\.UI\.RawUI\.WindowTitle') {
+                $mfLines[$i] = '$Host.UI.RawUI.WindowTitle = "OneTools"'
+            }
             elseif ($mfLines[$i] -match '^\s*exit\s+\d') {
                 $mfLines[$i] = $mfLines[$i] -replace '\bexit\b', 'return'
             }
         }
         $mfPatched = $mfLines -join "`n"
         $mfSb = [scriptblock]::Create($mfPatched)
-
-        # Guardar y restaurar el titulo de la ventana (manifests.ps1 lo cambia)
-        $tituloOriginal = $Host.UI.RawUI.WindowTitle
 
         $mfTotal = $APP_IDS.Count
         $mfIdx   = 0
@@ -667,10 +670,12 @@ if ($APP_IDS.Count -gt 0) {
             Write-Host "`r      Procesando $mfIdx/$mfTotal ($mfPct%) - AppID $appId   " -NoNewline -ForegroundColor White
 
             $env:APP_ID = $appId
+            # Forzar titulo antes/despues por si el script externo lo cambia.
+            $Host.UI.RawUI.WindowTitle = "OneTools"
             try { & $mfSb *> $null } catch { }
+            $Host.UI.RawUI.WindowTitle = "OneTools"
         }
         $env:APP_ID = $null
-        $Host.UI.RawUI.WindowTitle = $tituloOriginal
 
         if ($mfTotal -eq 1) {
             Write-Host "`r      Juego AÑADIDO a tu biblioteca!                                " -ForegroundColor Green
