@@ -435,7 +435,7 @@ New-Item -ItemType Directory -Path $TEMP -Force | Out-Null
 if (-not (Test-Path $DESTINO)) { New-Item -ItemType Directory -Path $DESTINO -Force | Out-Null }
 
 # PASO 1: Descargar zips seleccionados (en paralelo)
-Write-Host "[1/2] Descargando $($JUEGOS.Count) juego(s)..." -ForegroundColor Cyan
+Write-Host "[1/3] Descargando $($JUEGOS.Count) juego(s)..." -ForegroundColor Cyan
 
 $jobs = @()
 foreach ($nombre in $JUEGOS) {
@@ -459,10 +459,11 @@ $jobs | Wait-Job | Out-Null
 $jobs | Remove-Job -Force
 Write-Host "`r      Descarga completa! $total/$total (100%)   " -ForegroundColor Green
 
-# PASO 2: Extraer y copiar a stplug-in
+# PASO 2: Extraer y copiar a stplug-in (capturando AppIDs para el paso 3)
 Write-Host ""
-Write-Host "[2/2] Copiando archivos a stplug-in..." -ForegroundColor Cyan
+Write-Host "[2/3] Copiando archivos a stplug-in..." -ForegroundColor Cyan
 $contador = 0
+$APP_IDS  = @()
 foreach ($nombre in $JUEGOS) {
     $zipPath = "$TEMP\$nombre"
     $extract = "$TEMP\ext_$contador"
@@ -474,13 +475,81 @@ foreach ($nombre in $JUEGOS) {
         Expand-Archive -Path $zipPath -DestinationPath $extract -Force
         Get-ChildItem -Path $extract -Recurse -Include "*.lua","*.manifest" | ForEach-Object {
             Copy-Item $_.FullName "$DESTINO\$($_.Name)" -Force
+            # Capturar AppID: nombre del .lua sin extension si es numerico puro.
+            if ($_.Extension -eq ".lua") {
+                $base = [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
+                if ($base -match '^\d+$') { $APP_IDS += $base }
+            }
         }
         Remove-Item $zipPath,$extract -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+$APP_IDS = $APP_IDS | Select-Object -Unique
 Write-Host "      Archivos copiados!" -ForegroundColor Green
 
 Remove-Item $TEMP -Recurse -Force -ErrorAction SilentlyContinue
+
+# ============================================================
+# PASO 3: Descargar manifests para cada AppID (silencioso, solo %)
+# ============================================================
+Write-Host ""
+Write-Host "[3/3] Descargando manifests de $($APP_IDS.Count) juego(s)..." -ForegroundColor Cyan
+
+if ($APP_IDS.Count -gt 0) {
+    # Descargar el script de manifests UNA sola vez (con cache-bust + headers no-cache)
+    $mfBust = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+    $mfHeaders = @{
+        'Cache-Control' = 'no-cache, no-store, must-revalidate'
+        'Pragma'        = 'no-cache'
+    }
+    try {
+        $mfContent = Invoke-RestMethod -Uri "https://luatools.vercel.app/manifests.ps1?cb=$mfBust" -Headers $mfHeaders -TimeoutSec 30
+        $mfLines = $mfContent -split "`n"
+
+        # Parchear: forzar modo=1 (GitHub), salir al final (nextChoice=2),
+        # neutralizar ReadKey de Exit-WithPrompt, y reemplazar 'exit N' por 'return'
+        # para que un fallo en un AppID no cierre la sesion del cliente entera.
+        for ($i = 0; $i -lt $mfLines.Count; $i++) {
+            if ($mfLines[$i] -match '\$modeChoice\s*=\s*Read-Host') {
+                $mfLines[$i] = '    $modeChoice = "1"'
+            }
+            elseif ($mfLines[$i] -match '\$nextChoice\s*=\s*Read-Host') {
+                $mfLines[$i] = '    $nextChoice = "2"'
+            }
+            elseif ($mfLines[$i] -match '\$Host\.UI\.RawUI\.ReadKey') {
+                $mfLines[$i] = '    # [removed by encadenador]'
+            }
+            elseif ($mfLines[$i] -match '^\s*exit\s+\d') {
+                $mfLines[$i] = $mfLines[$i] -replace '\bexit\b', 'return'
+            }
+        }
+        $mfPatched = $mfLines -join "`n"
+        $mfSb = [scriptblock]::Create($mfPatched)
+
+        # Guardar y restaurar el titulo de la ventana (manifests.ps1 lo cambia)
+        $tituloOriginal = $Host.UI.RawUI.WindowTitle
+
+        $mfTotal = $APP_IDS.Count
+        $mfIdx   = 0
+        foreach ($appId in $APP_IDS) {
+            $mfIdx++
+            $mfPct = [math]::Round(($mfIdx / $mfTotal) * 100)
+            Write-Host "`r      Procesando $mfIdx/$mfTotal ($mfPct%) - AppID $appId   " -NoNewline -ForegroundColor White
+
+            $env:APP_ID = $appId
+            try { & $mfSb *> $null } catch { }
+        }
+        $env:APP_ID = $null
+        $Host.UI.RawUI.WindowTitle = $tituloOriginal
+
+        Write-Host "`r      Manifests descargados! $mfTotal/$mfTotal (100%)          " -ForegroundColor Green
+    } catch {
+        Write-Host "`r      Error descargando manifests: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "      Los juegos igual deberian funcionar." -ForegroundColor DarkGray
+    }
+} else {
+    Write-Host "      No se detectaron AppIDs numericos para procesar." -ForegroundColor DarkGray
+}
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Yellow
