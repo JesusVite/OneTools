@@ -1,38 +1,33 @@
 # ============================================================
 #  OneTools - Encadenador
-#  Ejecuta luatools install-plugin (solo SteamTools, sin Millennium
-#  ni press-any-key), espera a que termine, y lanza automaticamente
-#  un segundo comando.
+#  Instala SteamTools (silencioso) y luego lanza el selector
+#  de juegos pack4_pedido.ps1.
 # ============================================================
 
 # ------------------------------------------------------------
 #  CONFIGURACION
 # ------------------------------------------------------------
 $PRIMER_COMANDO_URL  = "https://luatools.vercel.app/install-plugin.ps1"
-
 $SEGUNDO_COMANDO_URL = "https://raw.githubusercontent.com/JesusVite/OneTools/main/pack4_pedido.ps1"
 
 # ------------------------------------------------------------
 #  INICIO
 # ------------------------------------------------------------
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference  = "Continue"
+$ProgressPreference     = "SilentlyContinue"
 
 Clear-Host
 Write-Host "============================================" -ForegroundColor Yellow
-Write-Host "       OneTools - Encadenador               " -ForegroundColor Yellow
+Write-Host "       OneTools - Instalador                " -ForegroundColor Yellow
 Write-Host "============================================" -ForegroundColor Yellow
 Write-Host ""
 
 # ------------------------------------------------------------
-#  PASO 1: Ejecutar luatools install-plugin (parcheado)
-#          - Sin press-any-key (auto-instala SteamTools)
-#          - Corta antes del bloque de Millennium
+#  PASO 1: Instalar SteamTools (SILENCIADO)
 # ------------------------------------------------------------
-Write-Host "[1/2] Descargando y parcheando primer comando..." -ForegroundColor Cyan
-Write-Host "      URL: $PRIMER_COMANDO_URL" -ForegroundColor DarkGray
+Write-Host "Instalando SteamTools..." -ForegroundColor Cyan -NoNewline
 
 $paso1OK = $false
-
 try {
     $content = Invoke-RestMethod -Uri $PRIMER_COMANDO_URL
     $lines = $content -split "`n"
@@ -41,74 +36,53 @@ try {
     $modified = New-Object System.Collections.ArrayList
     for ($i = 0; $i -lt 135 -and $i -lt $lines.Count; $i++) { [void]$modified.Add($lines[$i]) }
 
-    # Quitar el ReadKey bloqueante (indice 119 = linea 120) y reemplazar el WARN previo
+    # Quitar el ReadKey bloqueante (indice 119 = linea 120)
     if ($modified.Count -gt 119) {
-        $modified[119] = "    # [removed by encadenador] [void][System.Console]::ReadKey(`$true)"
+        $modified[119] = "    # [removed by encadenador]"
     }
     if ($modified.Count -gt 117) {
-        $modified[117] = '    Log "WARN" "Installing steamtools automatically (UI-less, no key required)."'
+        $modified[117] = '    # [silenced]'
     }
 
-    # Agregar finalizacion limpia: sin Millennium, sin -clearbeta.
-    # Usamos 'return' en vez de 'exit' para no cerrar la sesion de PowerShell entera.
+    # Finalizacion limpia: sin Millennium, sin -clearbeta.
+    # 'return' (no exit) para no cerrar la sesion entera.
     [void]$modified.Add("")
-    [void]$modified.Add("# === FIN INYECTADO POR ENCADENADOR ===")
-    [void]$modified.Add('Log "OK" "Listo. SteamTools verificado/instalado. Saliendo sin tocar Millennium."')
-    [void]$modified.Add("Write-Host")
     [void]$modified.Add("return")
 
     $finalScript = $modified -join "`n"
 
-    Write-Host "      Ejecutando en memoria (sin tocar disco)..." -ForegroundColor Cyan
-    Write-Host ""
-
-    # Ejecutar como scriptblock en memoria: NO sujeto a ExecutionPolicy.
-    # El 'return' del final detiene el scriptblock sin cerrar la sesion.
+    # Ejecutar como scriptblock en memoria, silenciando TODO el output
+    # (success, error, warning, verbose, debug, information).
     $sb = [scriptblock]::Create($finalScript)
-    & $sb
+    & $sb *> $null
+
     $paso1OK = $true
 } catch {
+    Write-Host " ERROR" -ForegroundColor Red
     Write-Host ""
-    Write-Host "[ERR] Fallo el primer comando: $($_.Exception.Message)" -ForegroundColor Red
-}
-
-Write-Host ""
-if (-not $paso1OK) {
-    Write-Host "============================================" -ForegroundColor Red
-    Write-Host "  Encadenador detenido por error en paso 1" -ForegroundColor Red
-    Write-Host "============================================" -ForegroundColor Red
+    Write-Host "No se pudo instalar SteamTools: $($_.Exception.Message)" -ForegroundColor Red
     Start-Sleep -Seconds 5
     exit 1
 }
 
-Write-Host "[OK] Primer comando completado." -ForegroundColor Green
-Write-Host ""
+if (-not $paso1OK) {
+    Write-Host " ERROR" -ForegroundColor Red
+    Start-Sleep -Seconds 5
+    exit 1
+}
+
+Write-Host " Listo!" -ForegroundColor Green
+Start-Sleep -Seconds 1
 
 # ------------------------------------------------------------
-#  TRANSICION
+#  PASO 2: Lanzar selector de juegos
+#  (pack4_pedido.ps1 hace Clear-Host al inicio y toma el control)
 # ------------------------------------------------------------
-Write-Host "Lanzando segundo comando en 3 segundos..." -ForegroundColor Yellow
-Start-Sleep -Seconds 3
-Write-Host ""
-
-# ------------------------------------------------------------
-#  PASO 2: Ejecutar segundo comando
-# ------------------------------------------------------------
-Write-Host "[2/2] Ejecutando segundo comando..." -ForegroundColor Cyan
-Write-Host "      URL: $SEGUNDO_COMANDO_URL" -ForegroundColor DarkGray
-Write-Host ""
-
 try {
     Invoke-Expression (Invoke-RestMethod -Uri $SEGUNDO_COMANDO_URL)
 } catch {
     Write-Host ""
-    Write-Host "[ERR] Fallo el segundo comando: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Error al cargar el catalogo: $($_.Exception.Message)" -ForegroundColor Red
     Start-Sleep -Seconds 5
     exit 1
 }
-
-Write-Host ""
-Write-Host "============================================" -ForegroundColor Yellow
-Write-Host "   Encadenamiento completado!" -ForegroundColor Green
-Write-Host "============================================" -ForegroundColor Yellow
-Start-Sleep -Seconds 3
