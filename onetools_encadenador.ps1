@@ -25,7 +25,7 @@ Write-Host ""
 # ------------------------------------------------------------
 #  PASO 1: Instalar SteamTools (SILENCIADO)
 # ------------------------------------------------------------
-Write-Host "Instalando SteamTools..." -ForegroundColor Cyan -NoNewline
+Write-Host "Instalando OneTools..." -ForegroundColor Cyan -NoNewline
 
 $paso1OK = $false
 try {
@@ -60,7 +60,7 @@ try {
 } catch {
     Write-Host " ERROR" -ForegroundColor Red
     Write-Host ""
-    Write-Host "No se pudo instalar SteamTools: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "No se pudo instalar OneTools: $($_.Exception.Message)" -ForegroundColor Red
     Start-Sleep -Seconds 5
     exit 1
 }

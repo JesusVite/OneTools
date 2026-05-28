@@ -487,6 +487,6 @@ Write-Host "============================================" -ForegroundColor Yello
 Write-Host "   Pedido completado con exito!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "Recordatorio: abre Steam y SteamTools manualmente" -ForegroundColor DarkGray
+Write-Host "Recordatorio: abre Steam y OneTools manualmente" -ForegroundColor DarkGray
 Write-Host "para que los juegos aparezcan en tu biblioteca." -ForegroundColor DarkGray
 Start-Sleep -Seconds 3
