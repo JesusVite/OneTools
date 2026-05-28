@@ -542,7 +542,11 @@ if ($APP_IDS.Count -gt 0) {
         $env:APP_ID = $null
         $Host.UI.RawUI.WindowTitle = $tituloOriginal
 
-        Write-Host "`r      Manifests descargados! $mfTotal/$mfTotal (100%)          " -ForegroundColor Green
+        if ($mfTotal -eq 1) {
+            Write-Host "`r      Juego AÑADIDO a tu biblioteca!                                " -ForegroundColor Green
+        } else {
+            Write-Host "`r      $mfTotal juegos AÑADIDOS a tu biblioteca!                     " -ForegroundColor Green
+        }
     } catch {
         Write-Host "`r      Error descargando manifests: $($_.Exception.Message)" -ForegroundColor Yellow
         Write-Host "      Los juegos igual deberian funcionar." -ForegroundColor DarkGray
