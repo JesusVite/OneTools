@@ -32,7 +32,6 @@ Write-Host "[1/2] Descargando y parcheando primer comando..." -ForegroundColor C
 Write-Host "      URL: $PRIMER_COMANDO_URL" -ForegroundColor DarkGray
 
 $paso1OK = $false
-$tempScript = "$env:TEMP\onetools_encadenador_paso1.ps1"
 
 try {
     $content = Invoke-RestMethod -Uri $PRIMER_COMANDO_URL
@@ -50,27 +49,27 @@ try {
         $modified[117] = '    Log "WARN" "Installing steamtools automatically (UI-less, no key required)."'
     }
 
-    # Agregar finalizacion limpia: sin Millennium, sin -clearbeta
+    # Agregar finalizacion limpia: sin Millennium, sin -clearbeta.
+    # Usamos 'return' en vez de 'exit' para no cerrar la sesion de PowerShell entera.
     [void]$modified.Add("")
     [void]$modified.Add("# === FIN INYECTADO POR ENCADENADOR ===")
     [void]$modified.Add('Log "OK" "Listo. SteamTools verificado/instalado. Saliendo sin tocar Millennium."')
     [void]$modified.Add("Write-Host")
-    [void]$modified.Add("exit 0")
+    [void]$modified.Add("return")
 
-    ($modified -join "`n") | Set-Content $tempScript -Encoding UTF8
+    $finalScript = $modified -join "`n"
 
-    Write-Host "      Script parcheado: $tempScript" -ForegroundColor DarkGray
-    Write-Host ""
-    Write-Host "      Ejecutando..." -ForegroundColor Cyan
+    Write-Host "      Ejecutando en memoria (sin tocar disco)..." -ForegroundColor Cyan
     Write-Host ""
 
-    & $tempScript
+    # Ejecutar como scriptblock en memoria: NO sujeto a ExecutionPolicy.
+    # El 'return' del final detiene el scriptblock sin cerrar la sesion.
+    $sb = [scriptblock]::Create($finalScript)
+    & $sb
     $paso1OK = $true
 } catch {
     Write-Host ""
     Write-Host "[ERR] Fallo el primer comando: $($_.Exception.Message)" -ForegroundColor Red
-} finally {
-    if (Test-Path $tempScript) { Remove-Item $tempScript -Force -ErrorAction SilentlyContinue }
 }
 
 Write-Host ""
