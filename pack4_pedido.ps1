@@ -1,13 +1,14 @@
 # ============================================================
-#  OneTools - Pack 4 - Pedido personalizado
+#  OneTools - Pack 4 - Pedido personalizado (solo seleccion + copia)
+#
+#  IMPORTANTE: Esta version asume que SteamTools YA esta instalado.
+#  Para el flujo completo (instalar SteamTools + seleccionar + copiar),
+#  usar el encadenador: onetools_encadenador.ps1
 # ============================================================
 
-$R2_BASE        = "https://pub-3969552ebd69440da9632dee8d18453b.r2.dev/pack4"
-$INSTALLER_URL  = "https://raw.githubusercontent.com/JesusVite/OneTools/main/OneTools_Setup.exe"
-$DESTINO        = "${env:ProgramFiles(x86)}\Steam\config\stplug-in"
-$STEAMTOOLS_EXE = "C:\Program Files\SteamTools\SteamTools.exe"
-$STEAM_EXE      = "${env:ProgramFiles(x86)}\Steam\steam.exe"
-$TEMP           = "$env:TEMP\onetools_pedido"
+$R2_BASE  = "https://pub-3969552ebd69440da9632dee8d18453b.r2.dev/pack4"
+$DESTINO  = "${env:ProgramFiles(x86)}\Steam\config\stplug-in"
+$TEMP     = "$env:TEMP\onetools_pedido"
 
 $TODOS = @(
     "60 Second Strike.zip",
@@ -422,7 +423,7 @@ if ($confirmar -ne "s") {
 }
 
 # ============================================================
-# INSTALACION
+# INSTALACION (solo descarga + copia a stplug-in)
 # ============================================================
 Clear-Host
 Write-Host "============================================" -ForegroundColor Yellow
@@ -433,22 +434,8 @@ Write-Host ""
 New-Item -ItemType Directory -Path $TEMP -Force | Out-Null
 if (-not (Test-Path $DESTINO)) { New-Item -ItemType Directory -Path $DESTINO -Force | Out-Null }
 
-# PASO 1: Descargar e instalar OneTools Setup
-Write-Host "[1/4] Descargando OneTools Setup..." -ForegroundColor Cyan
-$installer = "$TEMP\setup.exe"
-(New-Object System.Net.WebClient).DownloadFile($INSTALLER_URL, $installer)
-Write-Host "      Instalando SteamTools..." -ForegroundColor Cyan
-Start-Process -FilePath $installer -ArgumentList "/S" -Wait
-Start-Sleep -Seconds 5
-$intentos = 0
-while (-not (Test-Path $STEAMTOOLS_EXE) -and $intentos -lt 10) {
-    Start-Sleep -Seconds 2; $intentos++
-}
-Write-Host "      Listo!" -ForegroundColor Green
-
-# PASO 2: Descargar zips seleccionados
-Write-Host ""
-Write-Host "[2/4] Descargando $($JUEGOS.Count) juego(s)..." -ForegroundColor Cyan
+# PASO 1: Descargar zips seleccionados (en paralelo)
+Write-Host "[1/2] Descargando $($JUEGOS.Count) juego(s)..." -ForegroundColor Cyan
 
 $jobs = @()
 foreach ($nombre in $JUEGOS) {
@@ -472,9 +459,9 @@ $jobs | Wait-Job | Out-Null
 $jobs | Remove-Job -Force
 Write-Host "`r      Descarga completa! $total/$total (100%)   " -ForegroundColor Green
 
-# PASO 3: Extraer y copiar a stplug-in
+# PASO 2: Extraer y copiar a stplug-in
 Write-Host ""
-Write-Host "[3/4] Instalando juegos..." -ForegroundColor Cyan
+Write-Host "[2/2] Copiando archivos a stplug-in..." -ForegroundColor Cyan
 $contador = 0
 foreach ($nombre in $JUEGOS) {
     $zipPath = "$TEMP\$nombre"
@@ -491,67 +478,7 @@ foreach ($nombre in $JUEGOS) {
         Remove-Item $zipPath,$extract -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
-Write-Host "      Juegos instalados!" -ForegroundColor Green
-
-# PASO 4: Abrir Steam y SteamTools
-Write-Host ""
-Write-Host "[4/4] Iniciando Steam y SteamTools..." -ForegroundColor Cyan
-
-if (Test-Path $STEAM_EXE) {
-    Start-Process -FilePath $STEAM_EXE
-    Start-Sleep -Seconds 5
-}
-
-if (Test-Path $STEAMTOOLS_EXE) {
-    Start-Process -FilePath $STEAMTOOLS_EXE
-    Start-Sleep -Seconds 5
-
-    Add-Type @"
-using System; using System.Runtime.InteropServices;
-public class MC {
-    [DllImport("user32.dll")] public static extern void mouse_event(int f,int x,int y,int c,int e);
-    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h,out RECT r);
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-    [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr h);
-    public struct RECT{public int Left,Top,Right,Bottom;}
-    public static void RC(int x,int y){SetCursorPos(x,y);System.Threading.Thread.Sleep(300);mouse_event(8,x,y,0,0);System.Threading.Thread.Sleep(150);mouse_event(16,x,y,0,0);}
-}
-"@
-    $intentosST = 0
-    do {
-        Start-Sleep -Seconds 2
-        $st = Get-Process -Name "SteamTools" -ErrorAction SilentlyContinue
-        $intentosST++
-    } while ((-not $st -or $st.MainWindowHandle -eq 0) -and $intentosST -lt 15)
-
-    if ($st -and $st.MainWindowHandle -ne 0) {
-        [MC]::SetForegroundWindow($st.MainWindowHandle) | Out-Null
-        [MC]::SetFocus($st.MainWindowHandle) | Out-Null
-        Start-Sleep -Seconds 1
-
-        $r = New-Object MC+RECT
-        [MC]::GetWindowRect($st.MainWindowHandle,[ref]$r) | Out-Null
-        $x = [int](($r.Left+$r.Right)/2); $y = [int](($r.Top+$r.Bottom)/2)
-
-        [MC]::RC($x,$y); Start-Sleep -Seconds 1
-
-        $w = New-Object -ComObject wscript.shell
-        $w.AppActivate($st.Id) | Out-Null
-        Start-Sleep -Milliseconds 500
-
-        $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
-        $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 300
-        $w.SendKeys("{ENTER}"); Start-Sleep -Seconds 20
-
-        # Steam se reinicio - SteamTools sigue flotando, hacer click directo en el overlay
-        [MC]::RC($x,$y); Start-Sleep -Seconds 1
-        $w.AppActivate($st.Id) | Out-Null
-        Start-Sleep -Milliseconds 500
-        1..10 | ForEach-Object { $w.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 150 }
-        $w.SendKeys("{ENTER}")
-    }
-}
+Write-Host "      Archivos copiados!" -ForegroundColor Green
 
 Remove-Item $TEMP -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -559,4 +486,7 @@ Write-Host ""
 Write-Host "============================================" -ForegroundColor Yellow
 Write-Host "   Pedido completado con exito!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Recordatorio: abre Steam y SteamTools manualmente" -ForegroundColor DarkGray
+Write-Host "para que los juegos aparezcan en tu biblioteca." -ForegroundColor DarkGray
 Start-Sleep -Seconds 3
