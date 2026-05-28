@@ -1,14 +1,144 @@
 # ============================================================
 #  OneTools - Pack 4 - Pedido personalizado (solo seleccion + copia)
 #
-#  IMPORTANTE: Esta version asume que SteamTools YA esta instalado.
-#  Para el flujo completo (instalar SteamTools + seleccionar + copiar),
-#  usar el encadenador: onetools_encadenador.ps1
+#  Este script requiere un codigo de orden valido. Si se ejecuta
+#  desde el encadenador (onetools_encadenador.ps1), reutiliza la
+#  sesion validada. Si se ejecuta directo, pide el codigo aqui mismo
+#  como segunda capa de defensa.
 # ============================================================
 
 $R2_BASE  = "https://pub-3969552ebd69440da9632dee8d18453b.r2.dev/pack4"
 $DESTINO  = "${env:ProgramFiles(x86)}\Steam\config\stplug-in"
 $TEMP     = "$env:TEMP\onetools_pedido"
+
+# ------------------------------------------------------------
+#  VALIDACION DE ACCESO (segunda capa anti-bypass)
+# ------------------------------------------------------------
+$SUPABASE_URL  = "https://phvbomzwynbmahxeatab.supabase.co"
+$SUPABASE_KEY  = "sb_publishable_FhIq7tTb_ieoQudbsPyzcg_PCrYK7gv"
+$MAX_INTENTOS  = 3
+
+function Get-DeviceIdInternal {
+    try {
+        $cpu  = (Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1).ProcessorId
+        $mb   = (Get-CimInstance Win32_BaseBoard -ErrorAction SilentlyContinue).SerialNumber
+        $disk = (Get-CimInstance Win32_DiskDrive -ErrorAction SilentlyContinue | Select-Object -First 1).SerialNumber
+        $raw  = "$cpu|$mb|$disk"
+        if ([string]::IsNullOrWhiteSpace($raw) -or $raw -eq "||") {
+            $raw = "$env:COMPUTERNAME|$env:USERNAME"
+        }
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($raw)
+        $hash  = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLower()
+    } catch {
+        $raw = "$env:COMPUTERNAME|$env:USERNAME|$env:PROCESSOR_IDENTIFIER"
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($raw)
+        $hash  = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLower()
+    }
+}
+
+function Test-CodigoInternal {
+    param([string]$Codigo, [string]$DeviceId)
+    $headers = @{
+        'apikey'        = $SUPABASE_KEY
+        'Authorization' = "Bearer $SUPABASE_KEY"
+        'Content-Type'  = 'application/json'
+    }
+    $body = @{ p_codigo = $Codigo; p_device_id = $DeviceId } | ConvertTo-Json
+    try {
+        return (Invoke-RestMethod -Method POST `
+            -Uri "$SUPABASE_URL/rest/v1/rpc/usar_codigo" `
+            -Headers $headers -Body $body -TimeoutSec 20)
+    } catch { return $null }
+}
+
+$deviceId   = Get-DeviceIdInternal
+$autorizado = $false
+$codigoUsado = $null
+
+# 1) Intentar reusar sesion del encadenador (si existe y es valida)
+if ($env:ONETOOLS_SESSION -and $env:ONETOOLS_SESSION -match '^(.+)\|(.+)$') {
+    $codigoSesion = $matches[1]
+    $deviceSesion = $matches[2]
+    # Anti-tampering: el device guardado debe coincidir con el calculado AHORA.
+    if ($deviceSesion -eq $deviceId) {
+        $res = Test-CodigoInternal -Codigo $codigoSesion -DeviceId $deviceId
+        if ($res -and ($res.status -eq 'ok' -or $res.status -eq 'activado')) {
+            $autorizado  = $true
+            $codigoUsado = $codigoSesion
+        }
+    }
+}
+
+# 2) Si no hay sesion valida, pedir codigo de orden directamente
+if (-not $autorizado) {
+    Clear-Host
+    Write-Host "============================================" -ForegroundColor Yellow
+    Write-Host "       OneTools - Acceso requerido          " -ForegroundColor Yellow
+    Write-Host "============================================" -ForegroundColor Yellow
+    Write-Host ""
+
+    for ($i = 1; $i -le $MAX_INTENTOS; $i++) {
+        $codigo = (Read-Host "Ingresa tu codigo de orden").Trim().ToUpper()
+        if ([string]::IsNullOrWhiteSpace($codigo)) {
+            Write-Host "  Codigo vacio. Intenta de nuevo." -ForegroundColor Red
+            continue
+        }
+
+        Write-Host "  Verificando..." -ForegroundColor DarkGray
+        $res = Test-CodigoInternal -Codigo $codigo -DeviceId $deviceId
+
+        if ($null -eq $res) {
+            Write-Host "  Error de conexion. Verifica tu internet e intenta de nuevo." -ForegroundColor Red
+            continue
+        }
+
+        switch ($res.status) {
+            'activado' {
+                Write-Host "  $($res.mensaje)" -ForegroundColor Green
+                $autorizado  = $true
+                $codigoUsado = $codigo
+            }
+            'ok' {
+                Write-Host "  $($res.mensaje)" -ForegroundColor Green
+                $autorizado  = $true
+                $codigoUsado = $codigo
+            }
+            'invalido' {
+                Write-Host "  $($res.mensaje) Intento $i de $MAX_INTENTOS." -ForegroundColor Red
+            }
+            'bloqueado' {
+                Write-Host ""
+                Write-Host "============================================" -ForegroundColor Red
+                Write-Host "  $($res.mensaje)" -ForegroundColor Red
+                Write-Host "  Contacta al soporte para reactivar." -ForegroundColor Red
+                Write-Host "============================================" -ForegroundColor Red
+                $env:ONETOOLS_SESSION = $null
+                Start-Sleep -Seconds 5
+                exit 1
+            }
+            default {
+                Write-Host "  Respuesta inesperada del servidor." -ForegroundColor Red
+            }
+        }
+        if ($autorizado) { break }
+    }
+
+    if (-not $autorizado) {
+        Write-Host ""
+        Write-Host "============================================" -ForegroundColor Red
+        Write-Host "  Maximo de intentos alcanzado." -ForegroundColor Red
+        Write-Host "============================================" -ForegroundColor Red
+        $env:ONETOOLS_SESSION = $null
+        Start-Sleep -Seconds 5
+        exit 1
+    }
+
+    # Reescribir la sesion para el flujo posterior (si lo hay)
+    $env:ONETOOLS_SESSION = "$codigoUsado|$deviceId"
+    Start-Sleep -Seconds 1
+}
 
 $TODOS = @(
     "60 Second Strike.zip",
@@ -562,4 +692,8 @@ Write-Host "============================================" -ForegroundColor Yello
 Write-Host ""
 Write-Host "Recordatorio: abre Steam y OneTools manualmente" -ForegroundColor DarkGray
 Write-Host "para que los juegos aparezcan en tu biblioteca." -ForegroundColor DarkGray
+
+# Limpiar la sesion al terminar (no dejar residuo en variables de entorno)
+$env:ONETOOLS_SESSION = $null
+
 Start-Sleep -Seconds 3

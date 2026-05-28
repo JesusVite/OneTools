@@ -88,8 +88,9 @@ Write-Host "       OneTools - Instalador                " -ForegroundColor Yello
 Write-Host "============================================" -ForegroundColor Yellow
 Write-Host ""
 
-$deviceId = Get-DeviceId
-$autorizado = $false
+$deviceId    = Get-DeviceId
+$autorizado  = $false
+$codigoUsado = $null
 
 for ($i = 1; $i -le $MAX_INTENTOS; $i++) {
     $codigo = (Read-Host "Ingresa tu codigo de orden").Trim().ToUpper()
@@ -110,11 +111,13 @@ for ($i = 1; $i -le $MAX_INTENTOS; $i++) {
     switch ($res.status) {
         'activado' {
             Write-Host "  $($res.mensaje)" -ForegroundColor Green
-            $autorizado = $true
+            $autorizado  = $true
+            $codigoUsado = $codigo
         }
         'ok' {
             Write-Host "  $($res.mensaje)" -ForegroundColor Green
-            $autorizado = $true
+            $autorizado  = $true
+            $codigoUsado = $codigo
         }
         'invalido' {
             Write-Host "  $($res.mensaje) Intento $i de $MAX_INTENTOS." -ForegroundColor Red
@@ -125,6 +128,7 @@ for ($i = 1; $i -le $MAX_INTENTOS; $i++) {
             Write-Host "  $($res.mensaje)" -ForegroundColor Red
             Write-Host "  Contacta al soporte para reactivar." -ForegroundColor Red
             Write-Host "============================================" -ForegroundColor Red
+            $env:ONETOOLS_SESSION = $null
             Start-Sleep -Seconds 5
             exit 1
         }
@@ -141,9 +145,15 @@ if (-not $autorizado) {
     Write-Host "============================================" -ForegroundColor Red
     Write-Host "  Maximo de intentos alcanzado. Adios." -ForegroundColor Red
     Write-Host "============================================" -ForegroundColor Red
+    $env:ONETOOLS_SESSION = $null
     Start-Sleep -Seconds 5
     exit 1
 }
+
+# Exportar sesion para que pack4_pedido.ps1 la reuse sin pedir codigo otra vez.
+# Formato: "<codigo>|<device_id>". pack4_pedido valida que el device coincida
+# y revalida el codigo contra Supabase (defensa en profundidad).
+$env:ONETOOLS_SESSION = "$codigoUsado|$deviceId"
 
 Start-Sleep -Seconds 1
 Write-Host ""
