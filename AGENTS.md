@@ -26,6 +26,7 @@ EXACTOS** para las tareas comunes:
 |---|---|
 | `onetools_encadenador.ps1` | Orquestador: valida código de orden, instala SteamTools, lanza el selector. Es a lo que apunta `onetools.lat/install.ps1`. |
 | `pack4_pedido.ps1` | Selector de 1-10 juegos. La lista de juegos está en la variable `$TODOS`. Descarga vía URLs firmadas y copia `.lua`/`.manifest` a Steam. |
+| `onetools_juego.ps1` | Entrega de JUEGO INDIVIDUAL (1 código = 1 juego). Modo según `$env:ONETOOLS_MODO` (install=1 uso / reinstall=misma PC). Ver MANUAL-CAMBIOS.md TAREA 7. Comandos cliente: `onetools.lat/instalar.ps1` y `onetools.lat/reinstalar.ps1`. |
 | `pack4_entrega.ps1` | Versión vieja (pack completo). Usa R2 público directo → ya NO funciona porque el bucket es privado. No usar sin migrar. |
 | `onetools_setup.ps1` | Solo instala SteamTools. |
 | `onetools_uninstall.ps1` | Desinstala todo. |
