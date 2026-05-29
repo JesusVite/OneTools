@@ -224,6 +224,42 @@ dentro de líneas `Write-Host "..."`. Para cambiarlos:
 
 ---
 
+## TAREA 7: CREAR UN CÓDIGO DE JUEGO INDIVIDUAL (1 código = 1 juego)
+
+Sistema paralelo al de pack (1-10). Aquí vendes un código que instala UN solo
+juego fijo que tú asignas. Tiene dos comandos para el cliente:
+- Instalar (1 solo uso): `irm "https://onetools.lat/instalar.ps1" | iex`
+- Reinstalar (misma PC):  `irm "https://onetools.lat/reinstalar.ps1" | iex`
+
+**Cómo crear el código:**
+1. El juego debe existir en R2 (`pack4/<Nombre>.zip`). Para juego individual basta
+   que esté en R2 (no hace falta agregarlo a la lista `$TODOS`).
+2. Entrar a https://supabase.com/dashboard/project/phvbomzwynbmahxeatab/sql/new
+3. Pegar (el valor de `juego` debe ser el nombre EXACTO del .zip en R2):
+   ```sql
+   INSERT INTO public.ordenes (codigo, juego, notas) VALUES
+     ('ONE-L4D2-0001', 'Left 4 Dead 2.zip', 'Cliente que compro L4D2');
+   ```
+4. Run. Entregar el código `ONE-L4D2-0001` al cliente + el comando de instalar.
+
+**Cómo funciona:**
+- El cliente ejecuta `instalar.ps1`, pone su código → se instala SOLO el juego
+  asignado. El código queda atado a su PC (1 uso).
+- Si intenta instalar otra vez con el mismo código → rechazado ("ya usado").
+- Si necesita reinstalar (se le borró el juego) → usa `reinstalar.ps1` con el
+  mismo código en la MISMA PC → reinstala sin consumir.
+- En otra PC → rechazado.
+
+**Liberar / mover a otra PC:** igual que TAREA 4 (borrar `device_id` en `ordenes`).
+
+> Diferencia con los códigos de pack: los de pack tienen `juego = NULL` y sirven
+> para 1-10 juegos del catálogo. Los de juego individual tienen `juego = 'X.zip'`.
+> Las piezas de este sistema: scripts `onetools_juego.ps1` (repo OneTools),
+> `instalar.ps1`/`reinstalar.ps1` (repo game-access-key/public), Edge Function
+> `firmar-juego`, funciones SQL `instalar_juego`/`reinstalar_juego`.
+
+---
+
 ## DATOS DE REFERENCIA
 
 | Dato | Valor |
